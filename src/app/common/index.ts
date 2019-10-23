@@ -5,3 +5,4 @@ export { MyCommonModule } from './common.module';
 export { CommonComponent } from './common.component';
 
 //Here could be other exports, for instance services.
+export { CommonService } from './common.service';
