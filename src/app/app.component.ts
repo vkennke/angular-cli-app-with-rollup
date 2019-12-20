@@ -1,14 +1,4 @@
-import {
-  Component,
-  ɵNgModuleFactory as NgModuleFactory,
-  Injector,
-  ViewChild,
-  ViewContainerRef,
-  ComponentRef,
-  SimpleChanges,
-  SimpleChange, OnChanges, EventEmitter, OnInit
-} from '@angular/core';
-import { createCustomElement, NgElement } from '@angular/elements';
+import { Component, ɵNgModuleFactory as NgModuleFactory, Injector, ViewChild, ViewContainerRef, NgModuleRef } from '@angular/core';
 
 declare var System: any;
 
@@ -20,67 +10,53 @@ declare var System: any;
 export class AppComponent {
   title = 'angular-cli-app-with-rollup';
 
-  @ViewChild('placeholder', { read: ViewContainerRef, static: true })
-  container: ViewContainerRef;
+  @ViewChild('placeholder1', { read: ViewContainerRef, static: true })
+  container1: ViewContainerRef;
 
-  private randomText: string = '';
-  private dynamicComponent: ComponentRef<any>;
-  private webElement: NgElement;
+  @ViewChild('placeholder2', { read: ViewContainerRef, static: true })
+  container2: ViewContainerRef;
 
   constructor(private injector: Injector) {
+
+    // Here, des ES module is resolved by the import map.
+    // For a real plugin architecture, the mapping to the full bundle name would be driven by some metadata from the backend.
+    this.loadComponent('dyn', 'DynModule', 'dyn', injector)
+      .then(({ componentFactory, injector }) => {
+        this.container1.createComponent(componentFactory, 0, injector);
+      });
+    this.loadComponent('dyn', 'DynModule', 'dyn2', injector)
+      .then(({ componentFactory, injector }) => {
+        this.container2.createComponent(componentFactory, 0, injector);
+      });
   }
 
-  public async showAsDynamicComponent() {
-    if (!this.dynamicComponent) {
-      const m = await this.loadModule();
-      const moduleType = m['DynModule'];
-      const moduleFactory = new NgModuleFactory(moduleType);
-      const moduleRef = moduleFactory.create(this.injector);
-      //By type:
-      //let componentType = m['DynComponent'];
-      //By selector:
-      let componentType = this.findComponent(m, 'dyn');
-      let componentFactory = moduleRef.componentFactoryResolver.resolveComponentFactory(componentType);
-
-      this.dynamicComponent = this.container.createComponent(componentFactory, 0, moduleRef.injector, null, moduleRef);
-      this.setInputOnDynamicComponent('someInput', true);
-      this.listenToOutputOnDynamicComponent('someOutput');
-    }
+  private loadComponent(esModule: string, angularModule: string, componentSelector: string, injector: Injector) {
+    return this.loadAngularModule(esModule, angularModule, injector)
+      .then(({ m, moduleRef }) => { return { componentFactory: this.getComponentFactory(m, componentSelector, moduleRef), injector: moduleRef.injector }; }
+      );
   }
 
-  public async showAsWebElement() {
-    if (!this.webElement) {
-      const module = await this.loadModule();
-      const componentType = this.findComponent(module, 'dyn');
-      const moduleType = module['DynModule'];
-      const moduleFactory = new NgModuleFactory(moduleType);
-      const moduleRef = moduleFactory.create(this.injector);
-      const customElement = createCustomElement(componentType, {injector: moduleRef.injector});
-      customElements.define('dyn-ele', customElement);
-      this.webElement = document.createElement('dyn-ele') as any;
+  private loadAngularModule(esModule: string, angularModule: string, injector: Injector): Promise<{m: any; moduleRef: NgModuleRef<any> }> {
+    return System.import(esModule)
+      .then(m => {
 
-      this.setInputOnWebElement('someInput');
-      this.listenToOutputOnWebElement('someOutput');
-      this.addWebElementToDom();
-    }
+        const moduleRef = this.moduleRefs[esModule] || new NgModuleFactory(m[angularModule]).create(injector);
+        this.moduleRefs[esModule] = moduleRef;
+
+        return { m, moduleRef };
+      });
   }
 
-  public showRandomInputText() {
-    this.randomText = Math.random().toString(36).substring(7);
+  //By reusing the moduleRefs, we also always get the same injector for the same angular module
+  //Thus, there will be only one instance of DynService
+  moduleRefs: { [esModule: string]: NgModuleRef<any> } = {};
 
-    if (this.dynamicComponent) {
-      this.setInputOnDynamicComponent('someInput');
-    }
-
-    if (this.webElement) {
-      this.setInputOnWebElement('someInput');
-    }
-  }
-
-  // Here, "dyn" is resolved by the import map.
-  // For a real plugin architecture, the mapping to the full bundle name would be driven by some metadata from the backend.
-  private async loadModule() {
-    return await System.import('dyn');
+  private getComponentFactory(m: any, componentSelector: string, moduleRef: NgModuleRef<any>) {
+    //By type:
+    //let componentType = m['DynComponent'];
+    //By selector:
+    let componentType = this.findComponent(m, componentSelector);
+    return moduleRef.componentFactoryResolver.resolveComponentFactory(componentType);
   }
 
   /**
@@ -98,33 +74,4 @@ export class AppComponent {
       .find((t: any) => t.ɵcmp && t.ɵcmp.selectors[0][0] === componentSelector);
   }
 
-  private setInputOnWebElement(propName: string): void {
-    this.webElement[propName] = this.randomText;
-  }
-
-  private listenToOutputOnWebElement(propName: string) {
-    this.webElement.addEventListener(propName, (outputEvent: CustomEvent) => {
-      console.log('outputEvent in webElement: ', outputEvent.detail);
-    });
-  }
-
-  private addWebElementToDom() {
-    //document.body.appendChild(element);
-    const nativeElement = (this.container.element.nativeElement as HTMLElement);
-    nativeElement.parentNode.replaceChild(this.webElement, nativeElement);
-  }
-
-  private setInputOnDynamicComponent(propName: string, firstChange: boolean = false): void {
-    this.dynamicComponent.instance[propName] = this.randomText;
-    let changes: SimpleChanges = {};
-    changes[propName] = new SimpleChange(this.dynamicComponent.instance[propName], this.randomText, firstChange);
-    (this.dynamicComponent.instance as OnChanges).ngOnChanges(changes);
-    firstChange && (this.dynamicComponent.instance as OnInit).ngOnInit();
-  }
-
-  private listenToOutputOnDynamicComponent(propName: string) {
-    (this.dynamicComponent.instance[propName] as EventEmitter<any>).subscribe(value => {
-      console.log('outputEvent in dynamicComponent: ', value);
-    });
-  }
 }

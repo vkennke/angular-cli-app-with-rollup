@@ -2,13 +2,10 @@
   <h1>
     Welcome to {{ title }}!
   </h1>
-
-  <button (click)="showAsDynamicComponent()">Dynamic Component</button>
-  <button (click)="showAsWebElement()">WebElement</button>
-  <button (click)="showRandomInputText()">Show Random Input Text</button>
-
+  
   <my-common></my-common>
-  <div #placeholder></div>
+  <ng-container #placeholder1></ng-container>
+  <ng-container #placeholder2></ng-container>
 
   <app-comp1></app-comp1>
   <app-comp2></app-comp2>
