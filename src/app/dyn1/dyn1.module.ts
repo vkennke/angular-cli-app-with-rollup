@@ -14,8 +14,7 @@ import { DynService } from './dyn.service';
   imports: [
     MyCommonModule, DynCommonModule
   ],
-  exports: [DynComponent],
-  providers: [DynService]
+  exports: [DynComponent]
 })
 export class Dyn1Module { }
 

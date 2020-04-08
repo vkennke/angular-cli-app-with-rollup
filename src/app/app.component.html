@@ -3,9 +3,13 @@
     Welcome to {{ title }}!
   </h1>
 
-  <button (click)="showAsDynamicComponent()">Dynamic Component</button>
-  <button (click)="showAsWebElement()">WebElement</button>
-  <button (click)="showRandomInputText()">Show Random Input Text</button>
+  <button (click)="showAsDynamicComponent('dyn1', 'Dyn1Module', 'dyn', container1)">Dynamic Component 1</button>
+  <button (click)="showAsWebElement('dyn1', 'Dyn1Module', 'dyn', container1)">WebElement 1</button>
+  <button (click)="showAsDynamicComponent('dyn1', 'Dyn1Module', 'dyn2', container2)">Dynamic Component 2</button>
+  <button (click)="showAsWebElement('dyn1', 'Dyn1Module', 'dyn2', container2)">WebElement 2</button>
+  <button (click)="showAsDynamicComponent('dyn2', 'Dyn2Module', 'dyn3', container3)">Dynamic Component 3</button>
+  <button (click)="showAsWebElement('dyn2', 'Dyn2Module', 'dyn3', container3)">WebElement 3</button>
+  <button (click)="showRandomInputText()">Show Random Input Text on Dynamic Component 1</button>
 
   <my-common></my-common>
   <ng-container #placeholder1></ng-container>

@@ -1,4 +1,5 @@
-import { Component, ɵNgModuleFactory as NgModuleFactory, Injector, ViewChild, ViewContainerRef, NgModuleRef } from '@angular/core';
+import { Component, ComponentFactory, ComponentRef, EventEmitter, Injector, NgModuleRef, OnChanges, OnInit, SimpleChange, SimpleChanges, ViewChild, ViewContainerRef, ɵNgModuleFactory as NgModuleFactory } from '@angular/core';
+import { createCustomElement, NgElement } from '@angular/elements';
 
 declare var System: any;
 
@@ -10,13 +11,13 @@ declare var System: any;
 export class AppComponent {
   title = 'angular-cli-app-with-rollup';
 
-  @ViewChild('placeholder1', { read: ViewContainerRef, static: true })
+  @ViewChild('placeholder1', { read: ViewContainerRef, static: false })
   container1: ViewContainerRef;
 
-  @ViewChild('placeholder2', { read: ViewContainerRef, static: true })
+  @ViewChild('placeholder2', { read: ViewContainerRef, static: false })
   container2: ViewContainerRef;
 
-  @ViewChild('placeholder3', { read: ViewContainerRef, static: true })
+  @ViewChild('placeholder3', { read: ViewContainerRef, static: false })
   container3: ViewContainerRef;
 
   private randomText: string = '';
@@ -24,38 +25,20 @@ export class AppComponent {
   private webElement: NgElement;
 
   constructor(private injector: Injector) {
-
-    // Here, des ES module is resolved by the import map.
-    // For a real plugin architecture, the mapping to the full bundle name would be driven by some metadata from the backend.
-    this.loadComponent('dyn1', 'Dyn1Module', 'dyn', injector)
-      .then(({ componentFactory, injector }) => {
-        this.container1.createComponent(componentFactory, 0, injector);
-      });
-    this.loadComponent('dyn1', 'Dyn1Module', 'dyn2', injector)
-      .then(({ componentFactory, injector }) => {
-        this.container2.createComponent(componentFactory, 0, injector);
-      });
-    this.loadComponent('dyn2', 'Dyn2Module', 'dyn3', injector)
-      .then(({ componentFactory, injector }) => {
-        this.container3.createComponent(componentFactory, 0, injector);
-      });
   }
 
-  private loadComponent(esModule: string, angularModule: string, componentSelector: string, injector: Injector) {
-    return this.loadAngularModule(esModule, angularModule, injector)
-      .then(({ m, moduleRef }) => { return { componentFactory: this.getComponentFactory(m, componentSelector, moduleRef), injector: moduleRef.injector }; }
-      );
+  private async loadComponent(esModule: string, angularModule: string, componentSelector: string, injector: Injector): Promise<{ componentFactory: ComponentFactory<unknown>, injector: Injector }> {
+    const { m, moduleRef } = await this.loadAngularModule(esModule, angularModule, injector);
+    return { componentFactory: this.getComponentFactory(m, componentSelector, moduleRef), injector: moduleRef.injector };
   }
 
-  private loadAngularModule(esModule: string, angularModule: string, injector: Injector): Promise<{m: any; moduleRef: NgModuleRef<any> }> {
-    return System.import(esModule)
-      .then(m => {
+  private async loadAngularModule(esModule: string, angularModule: string, injector: Injector): Promise<{ m: any; moduleRef: NgModuleRef<any> }> {
+    const m = await System.import(esModule)
 
-        const moduleRef = this.moduleRefs[esModule] || new NgModuleFactory(m[angularModule]).create(injector);
-        this.moduleRefs[esModule] = moduleRef;
+    const moduleRef = this.moduleRefs[esModule] || new NgModuleFactory(m[angularModule]).create(injector);
+    this.moduleRefs[esModule] = moduleRef;
 
-        return { m, moduleRef };
-      });
+    return { m, moduleRef };
   }
 
   //By reusing the moduleRefs, we also always get the same injector for the same angular module
@@ -70,38 +53,30 @@ export class AppComponent {
     return moduleRef.componentFactoryResolver.resolveComponentFactory(componentType);
   }
 
-  public async showAsDynamicComponent() {
+  public async showAsDynamicComponent(esModule: string, angularModule: string, componentSelector: string, container: ViewContainerRef) {
     if (!this.dynamicComponent) {
-      const m = await this.loadModule();
-      const moduleType = m['DynModule'];
-      const moduleFactory = new NgModuleFactory(moduleType);
-      const moduleRef = moduleFactory.create(this.injector);
-      //By type:
-      //let componentType = m['DynComponent'];
-      //By selector:
-      let componentType = this.findComponent(m, 'dyn');
-      let componentFactory = moduleRef.componentFactoryResolver.resolveComponentFactory(componentType);
 
-      this.dynamicComponent = this.container.createComponent(componentFactory, 0, moduleRef.injector, null, moduleRef);
-      this.setInputOnDynamicComponent('someInput', true);
-      this.listenToOutputOnDynamicComponent('someOutput');
+      const { componentFactory, injector } = await this.loadComponent(esModule, angularModule, componentSelector, this.injector);
+
+      this.dynamicComponent = container.createComponent(componentFactory, 0, injector);
+
+      if (componentSelector === 'dyn') {
+        this.setInputOnDynamicComponent('someInput', true);
+        this.listenToOutputOnDynamicComponent('someOutput');
+      }
     }
   }
 
-  public async showAsWebElement() {
+  public async showAsWebElement(esModule: string, angularModule: string, componentSelector: string, container: ViewContainerRef) {
     if (!this.webElement) {
-      const module = await this.loadModule();
-      const componentType = this.findComponent(module, 'dyn');
-      const moduleType = module['DynModule'];
-      const moduleFactory = new NgModuleFactory(moduleType);
-      const moduleRef = moduleFactory.create(this.injector);
-      const customElement = createCustomElement(componentType, {injector: moduleRef.injector});
-      customElements.define('dyn-ele', customElement);
-      this.webElement = document.createElement('dyn-ele') as any;
-
+      const { m, moduleRef } = await this.loadAngularModule(esModule, angularModule, this.injector)
+      const componentType = this.findComponent(m, componentSelector);
+      const customElement = createCustomElement(componentType, { injector: moduleRef.injector });
+      customElements.define('dyn-' + componentSelector, customElement);
+      this.webElement = document.createElement('dyn-' + componentSelector) as any;
       this.setInputOnWebElement('someInput');
       this.listenToOutputOnWebElement('someOutput');
-      this.addWebElementToDom();
+      this.addWebElementToDom(container);
     }
   }
 
@@ -142,9 +117,9 @@ export class AppComponent {
     });
   }
 
-  private addWebElementToDom() {
+  private addWebElementToDom(container: ViewContainerRef) {
     //document.body.appendChild(element);
-    const nativeElement = (this.container.element.nativeElement as HTMLElement);
+    const nativeElement = (container.element.nativeElement as HTMLElement);
     nativeElement.parentNode.replaceChild(this.webElement, nativeElement);
   }
 
